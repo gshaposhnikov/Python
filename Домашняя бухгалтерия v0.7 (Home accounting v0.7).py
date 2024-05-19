@@ -3,6 +3,13 @@ from tkinter import ttk
 from tkcalendar import DateEntry
 import sqlite3
 from datetime import datetime
+import babel.numbers
+import babel.dates
+import babel.plural
+import babel.messages
+import babel.support
+import babel.localtime
+import babel.localedata
 
 # Создание базы данных и таблицы
 conn = sqlite3.connect('finance.db')
@@ -73,18 +80,22 @@ def generate_report():
 
     profit_loss = total_income - total_expense
 
-    report_text = f"Общий приход: {total_income}\nОбщий расход: {total_expense}\nИтоговый результат: {profit_loss}\n\n"
+    report_text = f"Общий приход: {babel.numbers.format_currency(total_income, 'RUB', locale='ru_RU')}\n" \
+                  f"Общий расход: {babel.numbers.format_currency(total_expense, 'RUB', locale='ru_RU')}\n" \
+                  f"Итоговый результат: {babel.numbers.format_currency(profit_loss, 'RUB', locale='ru_RU')}\n\n"
 
     # Добавление разделения по месяцам и подсчет итогов прибыли и убытков по каждому месяцу
     report_text += "Приход по месяцам:\n"
     for month, amount in income_by_month.items():
-        report_text += f"{month}: {amount}\n"
-    report_text += f"Итог приход: {total_income}\n\n"
+        report_text += f"{babel.dates.format_date(datetime.strptime(month, '%Y-%m'), format='MMMM yyyy', locale='ru_RU')}: " \
+                       f"{babel.numbers.format_currency(amount, 'RUB', locale='ru_RU')}\n"
+    report_text += f"Итог приход: {babel.numbers.format_currency(total_income, 'RUB', locale='ru_RU')}\n\n"
 
     report_text += "Расход по месяцам:\n"
     for month, amount in expense_by_month.items():
-        report_text += f"{month}: {amount}\n"
-    report_text += f"Итог Расход: {total_expense}\n"
+        report_text += f"{babel.dates.format_date(datetime.strptime(month, '%Y-%m'), format='MMMM yyyy', locale='ru_RU')}: " \
+                       f"{babel.numbers.format_currency(amount, 'RUB', locale='ru_RU')}\n"
+    report_text += f"Итог Расход: {babel.numbers.format_currency(total_expense, 'RUB', locale='ru_RU')}\n"
 
     report_window = tk.Toplevel(root)
     report_window.title("Финансовый отчет")
