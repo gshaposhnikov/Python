@@ -11,24 +11,25 @@ def countdown():
         show_notification()
 
 def show_notification():
+    global start_button
     notification_window = tk.Toplevel(root)
     notification_window.title("Уведомление о задаче")
     notification_window.attributes("-topmost", True)  # Делаем окно поверх всех других
     notification_window.grab_set()  # Блокируем взаимодействие с другими окнами
     notification_label = tk.Label(notification_window, text=f"Уведомление о: {event_entry.get()}\nВремя истекло (мин): {time_entry.get()}", font=("Arial", 16))
-    notification_label.pack(padx=40, pady=40)
+    notification_label.pack(padx=40, pady=20)
 
     # Центрируем окно уведомления относительно главного окна
-    notification_window.update_idletasks()
     x = (root.winfo_width() - notification_window.winfo_width()) // 5
     y = (root.winfo_height() - notification_window.winfo_height()) // 5
     notification_window.geometry(f"+{x}+{y}")
 
     # Ждем закрытия окна уведомления
     notification_window.wait_window()
+    start_button.config(state="normal")  # Делаем кнопку активной после закрытия окна уведомления
 
 root = tk.Tk()
-root.title("Уведомление v1.1")
+root.title("Уведомление v1.2")
 
 event_label = tk.Label(root, text="Напомнить о:")
 event_label.grid(row=0, column=0, padx=10, pady=10, sticky="e")
@@ -50,6 +51,7 @@ remaining_time = 0
 def start_countdown(minutes):
     global remaining_time
     remaining_time = minutes * 60
+    start_button.config(state="disabled")  # Делаем кнопку неактивной при запуске таймера
     countdown()
 
 root.mainloop()
