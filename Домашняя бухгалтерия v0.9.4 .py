@@ -5,11 +5,6 @@ import sqlite3
 from datetime import datetime
 import babel.numbers
 import babel.dates
-import babel.plural
-import babel.messages
-import babel.support
-import babel.localtime
-import babel.localedata
 
 # Создание базы данных и таблицы
 conn = sqlite3.connect('finance.db')
@@ -25,6 +20,12 @@ if 'type' not in columns:
 
 conn.commit()
 
+# Регистрация адаптера даты
+def adapt_datetime(dt):
+    return dt.isoformat()
+
+sqlite3.register_adapter(datetime, adapt_datetime)
+
 # Функции для работы с данными
 def add_transaction():
     date = date_cal.get_date()
@@ -32,29 +33,49 @@ def add_transaction():
     transaction_type = type_combo.get()
     amount = float(amount_entry.get())
     c.execute("INSERT INTO transactions (date, description, amount, type) VALUES (?, ?, ?, ?)",
-              (date, description, amount, transaction_type))
+              (date.isoformat(), description, amount, transaction_type))
     conn.commit()
-    update_tree()
+    update_tree(filter_year.get(), filter_month.get(), filter_type.get())
     clear_entries()
+
 
 def delete_transaction():
     selected = tree.selection()
     if selected:
         c.execute("DELETE FROM transactions WHERE id = ?", (tree.set(selected[0], '#1'),))
         conn.commit()
-        update_tree()
+        update_tree(filter_year.get(), filter_month.get(), filter_type.get())
 
-def update_tree():
+
+def update_tree(year=None, month=None, transaction_type=None):
     tree.delete(*tree.get_children())
-    c.execute("SELECT * FROM transactions")
-    for row in c:
-        tree.insert("", "end", values=row)
+    query = "SELECT * FROM transactions WHERE 1=1"
+    params = []
+
+    if year and year != "Все":
+        query += " AND date LIKE ?"
+        params.append(f'{year}-%')
+
+    if month and month != "Все":
+        query += " AND date LIKE ?"
+        params.append(
+            f'%-{list(babel.dates.get_month_names("wide", locale='ru_RU').keys())[list(babel.dates.get_month_names("wide", locale='ru_RU').values()).index(month)]:02d}-%')
+
+    if transaction_type and transaction_type != "Все":
+        query += " AND type = ?"
+        params.append(transaction_type)
+
+    c.execute(query, params)
+    for i, row in enumerate(c, start=1):
+        tree.insert("", "end", values=(row[0], i, row[1], row[2], row[3], row[4]))
+
 
 def clear_entries():
     date_cal.set_date(None)
     description_entry.delete(0, tk.END)
     type_combo.set("")
     amount_entry.delete(0, tk.END)
+
 
 def generate_report():
     total_income = 0
@@ -84,7 +105,6 @@ def generate_report():
                   f"Общий расход: {babel.numbers.format_currency(total_expense, 'RUB', locale='ru_RU')}\n" \
                   f"Итоговый результат: {babel.numbers.format_currency(profit_loss, 'RUB', locale='ru_RU')}\n\n"
 
-    # Добавление разделения по месяцам и подсчет итогов прибыли и убытков по каждому месяцу
     report_text += "Приход по месяцам:\n"
     for month, amount in income_by_month.items():
         report_text += f"{babel.dates.format_date(datetime.strptime(month, '%Y-%m'), format='MMMM yyyy', locale='ru_RU')}: " \
@@ -102,9 +122,10 @@ def generate_report():
     report_label = tk.Label(report_window, text=report_text)
     report_label.pack(padx=70, pady=70)
 
+
 # Создание GUI
 root = tk.Tk()
-root.title("Домашняя бухгалтерия v0.5")
+root.title("Домашняя бухгалтерия v0.9.4")
 
 # Верхняя панель
 top_frame = tk.Frame(root)
@@ -133,23 +154,71 @@ amount_entry.grid(row=0, column=7, padx=5)
 add_button = tk.Button(top_frame, text="Добавить", command=add_transaction)
 add_button.grid(row=0, column=8, padx=5)
 
+# Панель фильтров
+filter_frame = tk.Frame(root)
+filter_frame.pack(pady=10)
+
+filter_year_label = tk.Label(filter_frame, text="Год:")
+filter_year_label.grid(row=0, column=0, padx=5)
+filter_year = ttk.Combobox(filter_frame, values=[], state="readonly")
+filter_year.grid(row=0, column=1, padx=5)
+
+filter_month_label = tk.Label(filter_frame, text="Месяц:")
+filter_month_label.grid(row=0, column=2, padx=5)
+month_names = babel.dates.get_month_names("wide", locale='ru_RU')
+filter_month = ttk.Combobox(filter_frame, values=["Все"] + list(month_names.values())[0:], state="readonly")
+filter_month.grid(row=0, column=3, padx=5)
+
+filter_type_label = tk.Label(filter_frame, text="Тип:")
+filter_type_label.grid(row=0, column=4, padx=5)
+filter_type = ttk.Combobox(filter_frame, values=["Все", "Приход", "Расход"], state="readonly")
+filter_type.grid(row=0, column=5, padx=5)
+
+filter_button = tk.Button(filter_frame, text="Фильтровать",
+                          command=lambda: update_tree(filter_year.get(), filter_month.get(), filter_type.get()))
+filter_button.grid(row=0, column=6, padx=5)
+
 # Таблица транзакций
-tree = ttk.Treeview(root, columns=("id", "date", "description", "amount", "type"))
-tree.heading("#0", text="")
-tree.heading("#1", text="ID")
-tree.heading("#2", text="Дата")
-tree.heading("#3", text="Описание")
-tree.heading("#4", text="Сумма")
-tree.heading("#5", text="Тип")
-tree.pack(pady=10)
+tree_frame = tk.Frame(root)
+tree_frame.pack(pady=10)
 
-# Кнопка удаления
-delete_button = tk.Button(root, text="Удалить", command=delete_transaction)
-delete_button.pack(pady=5)
+tree = ttk.Treeview(tree_frame, columns=("id", "№", "date", "description", "amount", "type"), show="headings")
+tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-# Кнопка формирования отчета
-report_button = tk.Button(root, text="Сформировать отчет", command=generate_report)
-report_button.pack(pady=5)
+tree.column("id", width=50)
+tree.column("№", width=50)
+tree.column("date", width=100)
+tree.column("description", width=200)
+tree.column("amount", width=100)
+tree.column("type", width=100)
 
+tree.heading("id", text="ID")
+tree.heading("№", text="№")
+tree.heading("date", text="Дата")
+tree.heading("description", text="Описание")
+tree.heading("amount", text="Сумма")
+tree.heading("type", text="Тип")
+
+scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
+scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+tree.configure(yscrollcommand=scrollbar.set)
+
+# Кнопки для удаления и генерации отчета
+button_frame = tk.Frame(root)
+button_frame.pack(pady=10)
+
+delete_button = tk.Button(button_frame, text="Удалить", command=delete_transaction)
+delete_button.pack(side=tk.LEFT, padx=5)
+
+report_button = tk.Button(button_frame, text="Отчет", command=generate_report)
+report_button.pack(side=tk.LEFT, padx=5)
+
+# Заполнение списка годов
+c.execute("SELECT DISTINCT substr(date, 1, 4) AS year FROM transactions ORDER BY year DESC")
+years = [row[0] for row in c]
+filter_year['values'] = ["Все"] + years
+
+# Обновление дерева виджетов при запуске
 update_tree()
+
 root.mainloop()
