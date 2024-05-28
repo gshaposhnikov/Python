@@ -125,7 +125,7 @@ def generate_report():
 
 # Создание GUI
 root = tk.Tk()
-root.title("Домашняя бухгалтерия v0.9.4")
+root.title("Домашняя бухгалтерия v1.0")
 
 # Верхняя панель
 top_frame = tk.Frame(root)
@@ -199,6 +199,12 @@ tree.heading("description", text="Описание")
 tree.heading("amount", text="Сумма")
 tree.heading("type", text="Тип")
 
+total_label = tk.Label(tree_frame, text="Итого:")
+total_label.pack(side=tk.LEFT, padx=10)
+
+total_amount_label = tk.Label(tree_frame, text="0.00")
+total_amount_label.pack(side=tk.LEFT)
+
 scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
 scrollbar.pack(side=tk.LEFT, fill=tk.Y)
 tree.configure(yscrollcommand=scrollbar.set)
@@ -220,5 +226,37 @@ filter_year['values'] = ["Все"] + years
 
 # Обновление дерева виджетов при запуске
 update_tree()
+
+def calculate_total_amount():
+    total_amount = 0
+    for item in tree.get_children():
+        amount = float(tree.set(item, "amount"))
+        total_amount += amount
+    return total_amount
+
+def update_tree(year=None, month=None, transaction_type=None):
+    tree.delete(*tree.get_children())
+    query = "SELECT * FROM transactions WHERE 1=1"
+    params = []
+
+    if year and year != "Все":
+        query += " AND date LIKE ?"
+        params.append(f'{year}-%')
+
+    if month and month != "Все":
+        query += " AND date LIKE ?"
+        params.append(
+            f'%-{list(babel.dates.get_month_names("wide", locale='ru_RU').keys())[list(babel.dates.get_month_names("wide", locale='ru_RU').values()).index(month)]:02d}-%')
+
+    if transaction_type and transaction_type != "Все":
+        query += " AND type = ?"
+        params.append(transaction_type)
+
+    c.execute(query, params)
+    for i, row in enumerate(c, start=1):
+        tree.insert("", "end", values=(row[0], i, row[1], row[2], row[3], row[4]))
+
+    total_amount = calculate_total_amount()
+    total_amount_label.config(text=f"{total_amount:.2f}")
 
 root.mainloop()
