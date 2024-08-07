@@ -97,7 +97,7 @@ class NetworkMonitor:
             self.info_entry.delete(0, tk.END)
             self.add_button.config(state=tk.DISABLED)
         else:
-            messagebox.showwarning("Предупреждение", "IP или Информация о устройстве не введены.")
+            messagebox.showwarning("Предупреждение", "IP или Информация об устройстве не введены.")
 
     def remove_device(self, ip, frame):
         frame.destroy()
@@ -112,7 +112,11 @@ class NetworkMonitor:
         param = "-n" if platform.system().lower() == "windows" else "-c"
         command = ["ping", param, "1", ip]
         try:
-            output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
+            if platform.system().lower() == "windows":
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW, text=True)
+            else:
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            output = result.stdout
             if platform.system().lower() == "windows":
                 if "TTL=" in output:
                     return True
@@ -171,5 +175,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = NetworkMonitor(root)
     root.mainloop()
-
-
